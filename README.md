@@ -65,15 +65,24 @@ The agent can express emotions through the rain by including `<mood>` tags in it
 
 ### For Claude Code Users
 
-Install the MCP bridge and skill:
+Clone the repo and run the install script:
 
 ```bash
-npx @openclaw/matrix-bridge install
+git clone https://github.com/william-c-stanford/openclaw-matrix.git
+cd openclaw-matrix/packages/matrix-bridge
+npm install && npm run build
+node dist/install.js install
 ```
 
 This installs:
 1. A skill file (`~/.claude/skills/openclaw-mood/SKILL.md`) that teaches Claude the mood protocol
 2. An MCP server config for the `matrix_mood` tool (direct visual control)
+
+To uninstall:
+
+```bash
+node dist/install.js uninstall
+```
 
 ### For Other LLM Agents
 
