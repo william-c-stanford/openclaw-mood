@@ -253,7 +253,7 @@ pub fn build_connect_params(
         "minProtocol": 3,
         "maxProtocol": 3,
         "client": {
-            "id": "openclaw-matrix",
+            "id": "cli",
             "displayName": "Matrix Rain TUI",
             "version": env!("CARGO_PKG_VERSION"),
             "platform": std::env::consts::OS,

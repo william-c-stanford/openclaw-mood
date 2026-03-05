@@ -96,7 +96,7 @@ impl DeviceIdentity {
         signed_at_ms: u64,
     ) -> String {
         let payload = format!(
-            "v2|{}|openclaw-matrix|ui|operator|operator.admin|{}|{}|{}",
+            "v2|{}|cli|ui|operator|operator.admin|{}|{}|{}",
             self.device_id,
             signed_at_ms,
             token.unwrap_or(""),
