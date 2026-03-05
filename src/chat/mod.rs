@@ -61,6 +61,11 @@ impl ChatState {
         }
     }
 
+    /// Replace streaming content with a full snapshot (used when gateway sends accumulated text)
+    pub fn set_streaming(&mut self, content: String) {
+        self.streaming = Some(content);
+    }
+
     pub fn finish_streaming(&mut self) {
         if let Some(content) = self.streaming.take() {
             self.messages.push(ChatMessage {

@@ -337,48 +337,56 @@ impl App {
                 GatewayAction::Connected => {
                     self.connection_status = ConnectionStatus::Connected;
                 }
-                GatewayAction::Disconnected(_reason) => {
-                    self.connection_status = ConnectionStatus::Connecting; // will auto-reconnect
-                }
-                GatewayAction::ChatDelta(delta) => {
-                    self.chat.append_streaming(&delta);
-                    // Scan accumulated streaming text for complete <mood> tags
-                    if let Some(ref mut streaming) = self.chat.streaming {
-                        let (cleaned, updates) = mood_tag::extract_mood_tags(streaming);
-                        if !updates.is_empty() {
-                            *streaming = cleaned;
-                            for update in &updates {
-                                self.try_apply_mood(update);
-                            }
-                        }
+                GatewayAction::Disconnected(reason) => {
+                    // If we were streaming, finalize with connection-lost note
+                    if self.chat.streaming.is_some() {
+                        self.chat.finish_streaming();
+                        self.chat
+                            .push_assistant_message("[connection lost]".to_string());
                     }
+                    // Check if this is a permanent auth failure
+                    if reason == "auth failed" {
+                        self.connection_status = ConnectionStatus::Disconnected;
+                    } else {
+                        self.connection_status = ConnectionStatus::Connecting;
+                    }
+                }
+                GatewayAction::ChatDelta(text) => {
+                    // Gateway sends full accumulated text snapshots, not incremental deltas.
+                    // Strip mood tags and replace streaming content.
+                    let (cleaned, updates) = mood_tag::extract_mood_tags(&text);
+                    for update in &updates {
+                        self.try_apply_mood(update);
+                    }
+                    if self.chat.streaming.is_none() {
+                        self.chat.start_streaming();
+                    }
+                    self.chat.set_streaming(cleaned);
                 }
                 GatewayAction::ChatComplete(content) => {
-                    // Final extraction pass before finishing
-                    if let Some(ref mut streaming) = self.chat.streaming {
-                        let (cleaned, updates) = mood_tag::extract_mood_tags(streaming);
-                        if !updates.is_empty() {
-                            *streaming = cleaned;
-                            for update in &updates {
-                                self.try_apply_mood(update);
-                            }
-                        }
-                    }
-                    self.chat.finish_streaming();
-                    if !content.is_empty() {
-                        // Complete content provided; if streaming was already finished,
-                        // push as a new message
-                        if self.chat.streaming.is_none() && !content.is_empty() {
+                    // Final message — extract mood tags and finalize
+                    if self.chat.streaming.is_some() {
+                        // Apply mood tags from the final content if available
+                        if !content.is_empty() {
                             let (cleaned, updates) = mood_tag::extract_mood_tags(&content);
                             for update in &updates {
                                 self.try_apply_mood(update);
                             }
-                            self.chat.push_assistant_message(cleaned);
+                            self.chat.set_streaming(cleaned);
                         }
+                        self.chat.finish_streaming();
+                    } else if !content.is_empty() {
+                        let (cleaned, updates) = mood_tag::extract_mood_tags(&content);
+                        for update in &updates {
+                            self.try_apply_mood(update);
+                        }
+                        self.chat.push_assistant_message(cleaned);
                     }
                 }
                 GatewayAction::Error(msg) => {
-                    self.chat.finish_streaming();
+                    if self.chat.streaming.is_some() {
+                        self.chat.finish_streaming();
+                    }
                     self.chat.push_assistant_message(format!("[error] {msg}"));
                 }
                 GatewayAction::MoodUpdate(update) => {
