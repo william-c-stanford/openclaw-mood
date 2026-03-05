@@ -395,6 +395,10 @@ pub struct Cli {
     /// Run in offline mode (screensaver only, no gateway)
     #[arg(long, default_value_t = false)]
     pub offline: bool,
+
+    /// Mood update frequency: off, rare, normal, expressive
+    #[arg(long, default_value = "normal")]
+    pub mood_frequency: Option<String>,
 }
 
 impl Cli {

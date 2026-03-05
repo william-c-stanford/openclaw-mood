@@ -14,6 +14,7 @@ pub struct Saved {
     pub shade: Option<bool>,
     pub shade_gradient: Option<String>,
     pub bg_color: Option<String>,
+    pub mood_frequency: Option<String>,
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -49,6 +50,7 @@ pub fn save(settings: &cli::Cli) {
         shade: Some(settings.shade),
         shade_gradient: Some(settings.shade_gradient.clone()),
         bg_color: settings.bg_color.clone(),
+        mood_frequency: settings.mood_frequency.clone(),
     };
     let Ok(content) = toml::to_string_pretty(&saved) else {
         return;
@@ -87,5 +89,8 @@ pub fn apply(saved: &Saved, settings: &mut cli::Cli) {
     }
     if saved.bg_color.is_some() {
         settings.bg_color = saved.bg_color.clone();
+    }
+    if saved.mood_frequency.is_some() {
+        settings.mood_frequency = saved.mood_frequency.clone();
     }
 }

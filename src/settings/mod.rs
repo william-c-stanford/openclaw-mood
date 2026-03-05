@@ -89,6 +89,17 @@ impl SettingsState {
         ];
         let current_gradient = find_index(&gradient_options, &settings.shade_gradient);
 
+        let mood_options = vec![
+            "off".into(), "rare".into(), "normal".into(), "expressive".into(),
+        ];
+        let current_mood = match settings.mood_frequency.as_deref() {
+            Some("off") => 0,
+            Some("rare") => 1,
+            Some("normal") | None => 2,
+            Some("expressive") => 3,
+            _ => 2,
+        };
+
         let entries = vec![
             SettingEntry { label: "Color", options: color_options, selected: current_color },
             SettingEntry { label: "Head", options: head_options, selected: current_head },
@@ -97,6 +108,7 @@ impl SettingsState {
             SettingEntry { label: "Speed", options: speed_options, selected: current_speed },
             SettingEntry { label: "Shade", options: shade_options, selected: current_shade },
             SettingEntry { label: "Gradient", options: gradient_options, selected: current_gradient },
+            SettingEntry { label: "Mood", options: mood_options, selected: current_mood },
         ];
 
         Self { entries, cursor: 0 }
@@ -157,6 +169,7 @@ impl SettingsState {
         settings.speed = self.entries[4].current().to_string();
         settings.shade = self.entries[5].current() == "on";
         settings.shade_gradient = self.entries[6].current().to_string();
+        settings.mood_frequency = Some(self.entries[7].current().to_string());
 
         settings
     }

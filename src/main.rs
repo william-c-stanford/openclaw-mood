@@ -8,6 +8,7 @@ mod settings;
 mod effects;
 mod persist;
 mod mood;
+mod mood_tag;
 #[cfg(test)]
 mod test;
 

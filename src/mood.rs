@@ -324,10 +324,22 @@ impl MoodDirector {
         }
     }
 
-    /// Update base settings (called when user changes settings)
+    /// Update base settings (called when user changes settings).
+    /// If a mood is currently active, re-applies it against the new baseline.
     pub fn update_base(&mut self, body: [u8; 3], head: [u8; 3]) {
         self.base_body = body;
         self.base_head = head;
+
+        // Re-apply current mood against the new baseline
+        if let Some(mood) = self.current_mood {
+            let update = MoodUpdate {
+                mood: Some(mood),
+                intensity: self.intensity,
+                custom: None,
+                transition_ms: Some(1000), // quick re-settle
+            };
+            self.apply_mood(&update);
+        }
     }
 
     /// Apply a mood update from the agent

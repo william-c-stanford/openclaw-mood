@@ -18,6 +18,8 @@ use crate::gateway::{self, ConnectionStatus, GatewayAction, GatewayCommand};
 use crate::settings::{SettingsState, widget::SettingsWidget};
 use crate::effects::{EffectManager, EffectsWidget};
 use crate::mood::{Mood, MoodDirector, MoodUpdate};
+use crate::mood_tag;
+use std::time::{Duration, Instant};
 
 /// Application mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +49,8 @@ pub struct App {
     pub mood_director: MoodDirector,
     pub term_width: u16,
     pub term_height: u16,
+    /// Tracks last applied mood update for throttling
+    last_mood_update: Option<Instant>,
 }
 
 impl App {
@@ -88,7 +92,37 @@ impl App {
             mood_director,
             term_width: width,
             term_height: height,
+            last_mood_update: None,
         }
+    }
+
+    /// Returns the minimum interval between mood updates based on user preference.
+    fn mood_throttle_interval(&self) -> Option<Duration> {
+        match self.settings.mood_frequency.as_deref() {
+            Some("off") => None, // mood disabled
+            Some("rare") => Some(Duration::from_secs(30)),
+            Some("normal") | None => Some(Duration::from_secs(8)),
+            Some("expressive") => Some(Duration::from_secs(2)),
+            _ => Some(Duration::from_secs(8)),
+        }
+    }
+
+    /// Try to apply a mood update, respecting the throttle setting.
+    /// Returns true if the update was applied.
+    fn try_apply_mood(&mut self, update: &MoodUpdate) -> bool {
+        let Some(min_interval) = self.mood_throttle_interval() else {
+            return false; // mood is off
+        };
+
+        if let Some(last) = self.last_mood_update {
+            if last.elapsed() < min_interval {
+                return false; // throttled
+            }
+        }
+
+        self.mood_director.apply_mood(update);
+        self.last_mood_update = Some(Instant::now());
+        true
     }
 
     pub fn rebuild_rain(&mut self, width: u16, height: u16) {
@@ -286,10 +320,19 @@ impl App {
 
     /// Process pending gateway actions (non-blocking)
     pub fn process_gateway_actions(&mut self) {
-        let Some(ref mut rx) = self.gateway_rx else {
-            return;
+        // Drain all pending actions first to avoid borrow conflicts
+        let actions: Vec<GatewayAction> = {
+            let Some(ref mut rx) = self.gateway_rx else {
+                return;
+            };
+            let mut actions = Vec::new();
+            while let Ok(action) = rx.try_recv() {
+                actions.push(action);
+            }
+            actions
         };
-        while let Ok(action) = rx.try_recv() {
+
+        for action in actions {
             match action {
                 GatewayAction::Connected => {
                     self.connection_status = ConnectionStatus::Connected;
@@ -299,14 +342,38 @@ impl App {
                 }
                 GatewayAction::ChatDelta(delta) => {
                     self.chat.append_streaming(&delta);
+                    // Scan accumulated streaming text for complete <mood> tags
+                    if let Some(ref mut streaming) = self.chat.streaming {
+                        let (cleaned, updates) = mood_tag::extract_mood_tags(streaming);
+                        if !updates.is_empty() {
+                            *streaming = cleaned;
+                            for update in &updates {
+                                self.try_apply_mood(update);
+                            }
+                        }
+                    }
                 }
                 GatewayAction::ChatComplete(content) => {
+                    // Final extraction pass before finishing
+                    if let Some(ref mut streaming) = self.chat.streaming {
+                        let (cleaned, updates) = mood_tag::extract_mood_tags(streaming);
+                        if !updates.is_empty() {
+                            *streaming = cleaned;
+                            for update in &updates {
+                                self.try_apply_mood(update);
+                            }
+                        }
+                    }
                     self.chat.finish_streaming();
                     if !content.is_empty() {
                         // Complete content provided; if streaming was already finished,
                         // push as a new message
                         if self.chat.streaming.is_none() && !content.is_empty() {
-                            self.chat.push_assistant_message(content);
+                            let (cleaned, updates) = mood_tag::extract_mood_tags(&content);
+                            for update in &updates {
+                                self.try_apply_mood(update);
+                            }
+                            self.chat.push_assistant_message(cleaned);
                         }
                     }
                 }
@@ -315,7 +382,7 @@ impl App {
                     self.chat.push_assistant_message(format!("[error] {msg}"));
                 }
                 GatewayAction::MoodUpdate(update) => {
-                    self.mood_director.apply_mood(&update);
+                    self.try_apply_mood(&update);
                 }
             }
         }

@@ -114,8 +114,11 @@ impl IncomingFrame {
                 }
                 "mood.update" => {
                     if let Some(params) = frame.params {
-                        if let Ok(update) = serde_json::from_value(params) {
-                            return IncomingFrame::MoodUpdate(update);
+                        match serde_json::from_value::<crate::mood::MoodUpdate>(params.clone()) {
+                            Ok(update) => return IncomingFrame::MoodUpdate(update),
+                            Err(e) => {
+                                eprintln!("[protocol] malformed mood.update: {e} — raw: {params}");
+                            }
                         }
                     }
                     return IncomingFrame::Unknown(text.to_string());
